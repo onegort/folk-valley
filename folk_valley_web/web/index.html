@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Folk Valley</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #080808; color: #d7d7d7; font: 14px/1.4 system-ui, sans-serif; }
+    .frame { width: min(100%, 1100px); margin: 0 auto; padding: 12px; }
+    .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 10px; }
+    h1 { font-size: 17px; font-weight: 650; margin: 0; letter-spacing: .04em; }
+    .status { color: #888; font-size: 12px; }
+    #terminal { height: min(72vh, 650px); min-height: 360px; padding: 10px; border: 1px solid #303030; border-radius: 5px; background: #000; }
+    .help { margin: 9px 2px 0; color: #888; font-size: 12px; }
+    .help kbd { border: 1px solid #444; border-radius: 3px; padding: 1px 4px; color: #ccc; }
+    button { background: #222; border: 1px solid #444; color: #ddd; border-radius: 4px; padding: 6px 10px; cursor: pointer; }
+    button:hover { background: #333; }
+    @media (max-width: 600px) { .frame { padding: 6px; } #terminal { height: 70vh; min-height: 300px; padding: 4px; } .top { margin: 0 2px 8px; } }
+  </style>
+</head>
+<body>
+  <main class="frame">
+    <header class="top"><h1>FOLK VALLEY <span style="color:#777">/ V3.0</span></h1><div><span class="status" id="status">Connecting…</span> <button id="reconnect" type="button">Reconnect</button></div></header>
+    <div id="terminal" aria-label="Folk Valley text game terminal"></div>
+    <p class="help">Click the terminal and type normally. Press <kbd>Enter</kbd> to submit. Use <kbd>Ctrl+C</kbd> only if the game supports interrupting.</p>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+  <script>
+    const terminal = new Terminal({
+      cursorBlink: true, convertEol: false, scrollback: 3000,
+      fontFamily: 'Consolas, "Cascadia Mono", monospace', fontSize: 14,
+      theme: { background: '#000000', foreground: '#dddddd', cursor: '#eeeeee', selectionBackground: '#444444' }
+    });
+    const fitAddon = new FitAddon.FitAddon();
+    terminal.loadAddon(fitAddon);
+    terminal.open(document.getElementById('terminal'));
+    fitAddon.fit();
+    const statusEl = document.getElementById('status');
+    let socket = null;
+    let userClosed = false;
+    function connect() {
+      if (socket) { userClosed = true; socket.close(); }
+      userClosed = false;
+      statusEl.textContent = 'Connecting…';
+      terminal.reset();
+      const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      socket = new WebSocket(`${scheme}//${location.host}/terminal`);
+      socket.onopen = () => {
+        statusEl.textContent = 'Connected';
+        socket.send(JSON.stringify({type:'resize', cols:terminal.cols, rows:terminal.rows}));
+        terminal.focus();
+      };
+      socket.onmessage = (event) => terminal.write(event.data);
+      socket.onerror = () => { statusEl.textContent = 'Connection error'; };
+      socket.onclose = () => { statusEl.textContent = 'Disconnected'; };
+    }
+    terminal.onData(data => { if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({type:'input', data})); });
+    document.getElementById('reconnect').addEventListener('click', connect);
+    window.addEventListener('resize', () => {
+      fitAddon.fit();
+      if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({type:'resize', cols:terminal.cols, rows:terminal.rows}));
+    });
+    connect();
+  </script>
+</body>
+</html>
